@@ -1,0 +1,6 @@
+{
+  "name": "Bolsa de Apple Desktop",
+  "description": "Aplicación de bolsa idéntica a Apple Stocks para escritorio con backend de Yahoo Finance, cotizaciones en tiempo real, calculadora de cartera con conversión multidivisa y seguimiento de precios objetivo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
