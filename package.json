@@ -9,10 +9,37 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "electron:dev": "electron .",
-    "electron:pack:mac": "vite build && electron-builder --mac",
-    "electron:pack:win": "vite build && electron-builder --win",
+    "electron:pack:mac": "npm run build && electron-builder --mac",
+    "electron:pack:win": "npm run build && electron-builder --win",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.bolsa.apple.desktop",
+    "productName": "Bolsa",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

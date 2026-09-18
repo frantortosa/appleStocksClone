@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import https from 'https';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 
 const PORT = 3000;
@@ -879,7 +880,17 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const possibleDistPaths = [
+      process.env.DIST_PATH,
+      path.join(process.cwd(), 'dist'),
+      path.join(__dirname, '../dist'),
+      __dirname,
+    ].filter(Boolean) as string[];
+
+    const distPath =
+      possibleDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) ||
+      path.join(process.cwd(), 'dist');
+
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));

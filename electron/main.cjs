@@ -1,10 +1,45 @@
 // Electron Main Process for Apple Stocks Desktop App
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('path');
+const http = require('http');
 
 let mainWindow;
+let serverInstance = null;
 
-function createWindow() {
+// Start embedded Express server if running as a packaged app
+function startEmbeddedServer() {
+  if (app.isPackaged) {
+    try {
+      process.env.NODE_ENV = 'production';
+      const serverPath = path.join(__dirname, '../dist/server.cjs');
+      serverInstance = require(serverPath);
+    } catch (err) {
+      console.error('Failed to initialize embedded server:', err);
+    }
+  }
+}
+
+// Helper to poll until the local server is accepting connections
+function waitForServer(url, timeoutMs = 5000) {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      const req = http.get(url, (res) => {
+        resolve(true);
+      });
+      req.on('error', () => {
+        if (Date.now() - start > timeoutMs) {
+          resolve(false);
+        } else {
+          setTimeout(check, 150);
+        }
+      });
+    };
+    check();
+  });
+}
+
+async function createWindow() {
   const isMac = process.platform === 'darwin';
 
   mainWindow = new BrowserWindow({
@@ -20,17 +55,38 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
     },
   });
 
-  // Load either Vite dev server or production index.html
-  const startUrl = process.env.ELECTRON_START_URL || 
-    (app.isPackaged 
-      ? `file://${path.join(__dirname, '../dist/index.html')}`
-      : 'http://localhost:3000');
+  // Determine URL to load
+  let targetUrl = process.env.ELECTRON_START_URL;
+  if (!targetUrl) {
+    if (app.isPackaged) {
+      // In packaged production, try loading via embedded HTTP server first
+      const isReady = await waitForServer('http://localhost:3000', 3000);
+      if (isReady) {
+        targetUrl = 'http://localhost:3000';
+      } else {
+        // Fallback to local index.html with file protocol
+        targetUrl = `file://${path.join(__dirname, '../dist/index.html')}`;
+      }
+    } else {
+      targetUrl = 'http://localhost:3000';
+    }
+  }
 
-  mainWindow.loadURL(startUrl);
+  mainWindow.loadURL(targetUrl);
+
+  // If local server fails to load, gracefully fall back to local file
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.warn(`Failed to load ${validatedURL} (${errorCode}: ${errorDescription})`);
+    if (validatedURL.startsWith('http://localhost:3000')) {
+      const fallbackFile = path.join(__dirname, '../dist/index.html');
+      mainWindow.loadFile(fallbackFile).catch((e) => {
+        console.error('Fallback loadFile failed:', e);
+      });
+    }
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -111,9 +167,10 @@ function setupAppMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   setupAppMenu();
-  createWindow();
+  startEmbeddedServer();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
